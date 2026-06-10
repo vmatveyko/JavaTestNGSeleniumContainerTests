@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Test Suite" parallel="methods" thread-count="3">
+
+    <!-- Define the URL parameter here -->
+    <parameter name="appUrl" value="https://www.selenium.dev" />
+    <parameter name="editDocLink" value="https://github.com/SeleniumHQ/seleniumhq.github.io/edit/trunk/website_and_docs/content/documentation/_index.en.md"/>
+
+    <test name="Chrome tests">
+        <classes>
+            <class name="ru.vmatveyko.tests.SurfingTests" />
+        </classes>
+    </test>
+
+</suite>
