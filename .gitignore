@@ -10,6 +10,15 @@
 
 # vscode
 .code-workspace
+testing.code-workspace
+
+# allure
+*/.allure/*
+*/allure-report/*
+*/allure-results/*
+allure-report/*
+
+*/target/*
 
 # BlueJ files
 *.ctxt

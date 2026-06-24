@@ -19,6 +19,9 @@
         <lombok.version>1.18.46</lombok.version>
         <testcontainer.version>2.0.5</testcontainer.version>
         <maven.surefire.plugin.version>3.1.2</maven.surefire.plugin.version>
+        <allure.testng.version>2.35.2</allure.testng.version>
+        <aspectj.version>1.9.25.1</aspectj.version>
+        <allure.maven.version>3.0.1</allure.maven.version>
     </properties>
 
     <dependencies>
@@ -68,6 +71,12 @@
             <version>${selenium.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-testng</artifactId>
+            <version>${allure.testng.version}</version>
+        </dependency>
+
         <!-- Optional: For handling JSON responses -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
@@ -97,7 +106,17 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>src/main/java/testng.xml</suiteXmlFile>
                     </suiteXmlFiles>
+                    <argLine>
+                        -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
+                    </argLine>
                 </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.aspectj</groupId>
+                        <artifactId>aspectjweaver</artifactId>
+                        <version>${aspectj.version}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
 
             <!-- Maven Resources Plugin -->
@@ -107,6 +126,16 @@
                 <version>3.3.1</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>${allure.maven.version}</version>
+                <configuration>
+                    <resultsDirectory>${basedir}/target/allure-results</resultsDirectory>
+                    <reportDirectory>${basedir}/target/allure-report</reportDirectory>
                 </configuration>
             </plugin>
         </plugins>

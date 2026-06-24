@@ -2,6 +2,7 @@ package ru.vmatveyko.common;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import lombok.Getter;
 
@@ -42,7 +43,7 @@ public class ResourcePool<T> {
      * @throws InterruptedException
      */
     public T acquire() throws InterruptedException {
-        return pool.take();
+        return pool.poll(Dictionary.WAIT_TIME_FOR_CONTAINER, TimeUnit.SECONDS);
     }
 
     /**

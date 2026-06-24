@@ -13,11 +13,14 @@ public class WebDriverContainer {
     private BrowserWebDriverContainer<?> container;
     @Getter @Setter
     private WebDriver driver;
+    @Getter @Setter
+    private boolean isLastTestFailed;
 
 
     public WebDriverContainer(BrowserWebDriverContainer<?> cont, WebDriver driver) {
         this.container = cont;
         this.driver = driver;
+        this.isLastTestFailed = false;
     }
 
 }
