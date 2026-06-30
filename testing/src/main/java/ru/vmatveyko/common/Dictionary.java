@@ -21,11 +21,6 @@ public class Dictionary {
         Clickable, Visible, Enable
     }
 
-    //browsers
-    public enum Browsers {
-        chrome, firefox
-    }
-
     //container recording mode for web tests
     public static final VncRecordingMode CONTAINER_RECORDING_MODE = VncRecordingMode.SKIP;
 

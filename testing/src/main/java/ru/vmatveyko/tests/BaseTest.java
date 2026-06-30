@@ -99,8 +99,7 @@ public abstract class BaseTest {
                 }
             }
 
-            if (exp != null) throw exp;
-
+        if (exp != null) throw exp;
     }
 
     /**
@@ -173,7 +172,6 @@ public abstract class BaseTest {
             }
             logger.info("releasing container for reuse...");
             rpool.get(container.getContainerImage()).release(container);
-            //containerPool.release(container);
         }
     }
 
@@ -217,7 +215,6 @@ public abstract class BaseTest {
             rpool.put(img, containerPool);
             testImages.add(img);
         }
-
 
         logger.info("The profile setup process is completed");
     }
