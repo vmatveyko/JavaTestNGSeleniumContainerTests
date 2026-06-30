@@ -5,16 +5,23 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.openqa.selenium.Capabilities;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import org.testcontainers.containers.BrowserWebDriverContainer;
+import org.testcontainers.utility.DockerImageName;
 import org.testng.ITestContext;
 import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeSuite;
@@ -38,8 +45,10 @@ public abstract class BaseTest {
     @Getter @Setter
     protected String URL;
     private ChromeOptions chromeOptions;
-
-    private ResourcePool<WebDriverContainer> containerPool;
+    private FirefoxOptions firefoxOptions;
+    @Getter @Setter
+    protected List<String> testImages = new ArrayList<>();
+    private final HashMap<String,ResourcePool<WebDriverContainer>> rpool = new HashMap<>();
 
     @Step
     protected void hardPause(long pauseMillis) {
@@ -53,8 +62,8 @@ public abstract class BaseTest {
    /**
      * soft testng assertion execution
      *
-     * @param WebDriverContainer (pair of selenium webdriver and testcontainer) instance
-     * @param SoftAssert - TestNG SoftAssert
+     * @param wdcontainer (pair of selenium webdriver and testcontainer) instance
+     * @param softAssert TestNG SoftAssert
      */
     @Step
     protected void assertSoftAndReleaseContainer(WebDriverContainer wdcontainer, SoftAssert softAssert) {
@@ -68,47 +77,76 @@ public abstract class BaseTest {
         }
     }
 
+       /**
+     * soft testng assertion execution
+     *
+     * @param wdcList (pair of selenium webdriver and testcontainer) instance List
+     * @param saList TestNG SoftAssert List
+     */
+    @Step
+    protected void assertSoftAndReleaseContainers(
+        List<WebDriverContainer> wdcList, List<SoftAssert> saList) {
+            AssertionError exp = null;
+            for (int i=0; i < wdcList.size(); i++) {
+                try {
+                    saList.get(i).assertAll();
+                } catch(AssertionError e) {
+                    if (exp == null) exp = new AssertionError();
+                    wdcList.get(i).setLastTestFailed(true);
+                    exp.addSuppressed(e);
+                } finally {
+                    releaseContainer(wdcList.get(i));
+                }
+            }
+
+            if (exp != null) throw exp;
+
+    }
+
     /**
      * Take screenshot
      *
-     * @param WebDriverContainer (pair of selenium webdriver and testcontainer) instance
-     * @param filePath - file path as String to save screenshot
+     * @param wdcontainer (pair of selenium webdriver and testcontainer) instance
+     * @param filePath file path as String to save screenshot
+     * @param saveFile save screnshot file locally
      */
     @Step("Taking screenshot")
     @Attachment(value = "PageScreenshot", type = "image/png")
-    protected byte[] takeScreenShot(WebDriverContainer wdcontainer, String filePath) {
+    protected byte[] takeScreenShot(WebDriverContainer wdcontainer, String filePath, boolean saveFile) {
+        byte[] screenshotBytes = null;
         try {
-            byte[] screenshotBytes = ((TakesScreenshot) wdcontainer.getDriver()).getScreenshotAs(OutputType.BYTES);
-            try (OutputStream out = new BufferedOutputStream( new FileOutputStream(new File(filePath)) )
-                ) {
-                out.write(screenshotBytes);
-                return screenshotBytes;
-            }
+            screenshotBytes = ((TakesScreenshot) wdcontainer.getDriver()).getScreenshotAs(OutputType.BYTES);
+            if (saveFile)
+                try (OutputStream out = new BufferedOutputStream( new FileOutputStream(new File(filePath)) )
+                    ) {
+                    out.write(screenshotBytes);
+                }
         } catch (IOException ex) {
             logger.error("Could not take screenshot " + ex.getMessage());
-            return null;
         }
+        return screenshotBytes;
     }
 
     /**
      * WebDriverContainer instance creation
-     *
+     * @param capabilities webdriver capabilities
+     * @param containerImg selenium image name (i.e. standalone-firefox:latest)
      * @return WebDriverContainer (pair of selenium webdriver and testcontainer) instance
      */
-    private WebDriverContainer makeSeleniumContainerWithChrome() {
-        //DockerImageName image = DockerImageName.parse("selenium/standalone-chrome:4.41.0");
-        //container = new BrowserWebDriverContainer<>(image);
+    private WebDriverContainer makeSeleniumContainer(Capabilities capabilities, String containerImg) {
+        DockerImageName image = DockerImageName.parse(containerImg);
         @SuppressWarnings({ "resource", "deprecation" })
-        BrowserWebDriverContainer<?> cont = new BrowserWebDriverContainer<>()
+        BrowserWebDriverContainer<?> cont = new BrowserWebDriverContainer<>(image)
             .withReuse(Dictionary.HOLD_BROWSER_OPEN)
             //with reuse container option prevents same hash conflict
             .withEnv("INSTANCE_ID", UUID.randomUUID().toString())
             .withAccessToHost(true)
-            .withCapabilities(chromeOptions)
+            .withCapabilities(capabilities)
             .withRecordingMode(Dictionary.CONTAINER_RECORDING_MODE, new File("build"));
 
         cont.start();
-        return new WebDriverContainer(cont, new RemoteWebDriver(cont.getSeleniumAddress(), chromeOptions));
+        return new WebDriverContainer(
+            cont, new RemoteWebDriver(cont.getSeleniumAddress(), capabilities), containerImg);
     }
 
     /**
@@ -134,32 +172,52 @@ public abstract class BaseTest {
                 } catch (Exception e) {}
             }
             logger.info("releasing container for reuse...");
-            containerPool.release(container);
+            rpool.get(container.getContainerImage()).release(container);
+            //containerPool.release(container);
         }
     }
 
     /**
-     * @param url - base url
-     * @param context - TestNG context to obtain thread count
+     * @param url base url
+     * @param context TestNG context to obtain thread count
      */
     @BeforeSuite
-    @Parameters({"appUrl"})
-    public void setUp(@Optional("https://default-url.com") String url, ITestContext context) {
+    @Parameters({"appUrl", "images"})
+    public void setUp(@Optional("https://default-url.com") String url,
+        String images, ITestContext context) {
         URL = url;
-        chromeOptions = new ChromeOptions();
-        chromeOptions.addArguments("--incognito");
-        chromeOptions.addArguments("--ignore-certificate-errors");
-        chromeOptions.addArguments("--no-sandbox");
-        //.addArguments("--window-size=1920,1080");
+
+        List<String> imagesList = Arrays.asList(images.split(","));
 
         //If the <suite> thread count is not explicitly defined in the TestNG XML or command line,
         // getSuite().getXmlSuite().getThreadCount() returns -1
         final int parallelThreads = (context.getSuite().getXmlSuite().getThreadCount() > 0) ?
             context.getSuite().getXmlSuite().getThreadCount() : 1;
 
-        containerPool = new ResourcePool<>(parallelThreads, () ->
-            makeSeleniumContainerWithChrome()
-        );
+        ResourcePool<WebDriverContainer> containerPool = null;
+        for (String img : imagesList) {
+            if (img.toLowerCase().contains("chrome")) {
+                chromeOptions = new ChromeOptions();
+                chromeOptions.addArguments("--incognito");
+                chromeOptions.addArguments("--ignore-certificate-errors");
+                chromeOptions.addArguments("--no-sandbox");
+                //.addArguments("--window-size=1920,1080");
+                containerPool = new ResourcePool<>(parallelThreads, () ->
+                    makeSeleniumContainer(chromeOptions, "selenium/"+img)
+                );
+            }
+            else if (img.toLowerCase().contains("firefox")) {
+                firefoxOptions = new FirefoxOptions();
+                firefoxOptions.addArguments("--start-maximized");
+                firefoxOptions.setAcceptInsecureCerts(true);
+                containerPool = new ResourcePool<>(parallelThreads, () ->
+                    makeSeleniumContainer(firefoxOptions, "selenium/"+img)
+                );
+            }
+            rpool.put(img, containerPool);
+            testImages.add(img);
+        }
+
 
         logger.info("The profile setup process is completed");
     }
@@ -169,30 +227,34 @@ public abstract class BaseTest {
      */
     @AfterSuite
     public void clear() {
-        containerPool.removeResources(
-            () -> {
-                logger.warn("Stopping containers...");
-                for (WebDriverContainer c : containerPool.getPool()) {
-                    if ( !(Dictionary.HOLD_BROWSER_OPEN && c.isLastTestFailed()) ) {
-                        c.getContainer().stop();
+        rpool.forEach((key, containerPool) -> {
+            containerPool.removeResources(
+                () -> {
+                    logger.warn("Stopping containers...");
+                    for (WebDriverContainer c : containerPool.getPool()) {
+                        if ( !(Dictionary.HOLD_BROWSER_OPEN && c.isLastTestFailed()) ) {
+                            c.getContainer().stop();
+                        }
                     }
                 }
-            }
-        );
+            );
+        });
     }
 
     /**
      * Borrow a resource from pool
      *
+     * @param image container image
      * @return WebDriverContainer instance
      * @throws RuntimeException if could not acquire container
      */
     @Step
-    public WebDriverContainer initDriver() throws RuntimeException {
+    public WebDriverContainer initDriver(String image) throws RuntimeException {
         WebDriverContainer driverContainer;
         try {
-            driverContainer = containerPool.acquire();
+            driverContainer = rpool.get(image).acquire();
             if (driverContainer == null) throw new RuntimeException("Could not acquire container for selenium web test");
+            else driverContainer.setContainerImage(image);
         } catch (InterruptedException e) {
             logger.error(e.getMessage());
             throw new RuntimeException("Could not acquire container for selenium web test");

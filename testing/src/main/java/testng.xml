@@ -4,8 +4,10 @@
     <!-- Define the URL parameter here -->
     <parameter name="appUrl" value="https://www.selenium.dev" />
     <parameter name="editDocLink" value="https://github.com/SeleniumHQ/seleniumhq.github.io/edit/trunk/website_and_docs/content/documentation/_index.en.md"/>
+    <parameter name="images" value="standalone-chrome:4.41.0,standalone-firefox:latest"/>
 
-    <test name="Chrome tests">
+    <test name="Chrome and Firefox tests">
+        <parameter name="browsers" value="chrome,firefox"/>
         <classes>
             <class name="ru.vmatveyko.tests.SurfingTests" />
         </classes>
